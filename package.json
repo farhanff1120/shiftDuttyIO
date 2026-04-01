@@ -4,10 +4,10 @@
   "version": "0.0.0",
   "type": "module",
   "homepage": "https://farhanff1120.github.io/shiftDuttyIO",
-
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "predeploy": "npm run build",
     "deploy": "gh-pages -d dist"
   },
   "devDependencies": {
@@ -24,6 +24,7 @@
     "@vitejs/plugin-react": "^6.0.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "xlsx-js-style": "^1.2.0"
   }
 }

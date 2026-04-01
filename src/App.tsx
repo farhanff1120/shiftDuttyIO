@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import * as XLSX from "xlsx";
+import * as XLSX from "xlsx-js-style";
 
 type Shift = "P" | "S" | "M" | "X" | "C";
 
@@ -182,7 +182,7 @@ export default function App() {
       let totalM = 0;
 
       // hitung DUTY
-      schedule.forEach((row, i) => {
+      schedule.forEach((row) => {
         const shift = row.shifts[dayIndex];
 
         if (shift === "P") totalP++;
@@ -206,24 +206,130 @@ export default function App() {
 
   // EXPORT
   const exportExcel = () => {
+    const wb = XLSX.utils.book_new();
+
     const allNames = [
       ...schedule.map(r => r.name),
       ...extraLemburNames,
     ];
 
-    const data = allNames.map((name, i) => ({
-      Name: name,
-      ...dates.reduce((acc, d, idx) => {
-        acc[`D${d.day}`] = schedule[i]?.shifts?.[idx] || "";
-        acc[`L${d.day}`] = lembur[i]?.[idx] || "";
-        return acc;
-      }, {} as any)
-    }));
+    const wsData: any[][] = [];
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
+    // HEADER HARI
+    wsData.push([
+      "Hari",
+      ...dates.map(d => d.hari)
+    ]);
+
+    // HEADER TANGGAL
+    wsData.push([
+      "Tanggal",
+      ...dates.map(d => d.day)
+    ]);
+
+    // DUTY
+    schedule.forEach((row) => {
+      wsData.push([
+        row.name,
+        ...row.shifts
+      ]);
+    });
+
+    // PEMISAH
+    wsData.push(["Backup On Duty", ...Array(dates.length).fill("")]);
+
+    // LEMBUR
+    allNames.forEach((name, i) => {
+      wsData.push([
+        name,
+        ...dates.map((_, d) => lembur[i]?.[d] || "")
+      ]);
+    });
+
+    // TOTAL
+    wsData.push([
+      "Total P",
+      ...totals.map(t => t.totalP)
+    ]);
+
+    wsData.push([
+      "Total S",
+      ...totals.map(t => t.totalS)
+    ]);
+
+    wsData.push([
+      "Total M",
+      ...totals.map(t => t.totalM)
+    ]);
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // 🎨 STYLE
+    const range = XLSX.utils.decode_range(ws["!ref"] || "");
+
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+
+        if (!ws[cellRef]) continue;
+
+        const cell = ws[cellRef];
+
+        // default border
+        cell.s = {
+          border: {
+            top: { style: "thin" },
+            bottom: { style: "thin" },
+            left: { style: "thin" },
+            right: { style: "thin" },
+          },
+          alignment: {
+            horizontal: "center",
+            vertical: "center",
+          }
+        };
+
+        // HEADER
+        if (R === 0 || R === 1) {
+          cell.s.fill = {
+            fgColor: { rgb: "DDDDDD" }
+          };
+        }
+
+        // PEMISAH
+        if (cell.v === "Backup On Duty") {
+          cell.s.fill = {
+            fgColor: { rgb: "FFD966" }
+          };
+        }
+
+        // TOTAL
+        if (
+          cell.v === "Total P" ||
+          cell.v === "Total S" ||
+          cell.v === "Total M"
+        ) {
+          cell.s.fill = {
+            fgColor: { rgb: "CCCCCC" }
+          };
+        }
+
+        // WEEKEND / HOLIDAY
+        if (C > 0 && dates[C - 1]) {
+          if (dates[C - 1].isHoliday) {
+            cell.s.fill = {
+              fgColor: { rgb: "FF4D4D" }
+            };
+          } else if (dates[C - 1].isWeekend) {
+            cell.s.fill = {
+              fgColor: { rgb: "FFCCCC" }
+            };
+          }
+        }
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, ws, "Schedule");
-
     XLSX.writeFile(wb, `schedule-${month}.xlsx`);
   };
 
