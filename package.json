@@ -1,0 +1,29 @@
+{
+  "name": "vite-project",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "homepage": "https://farhanff1120.github.io/shiftDuttyIO",
+
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "deploy": "gh-pages -d dist"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "autoprefixer": "^10.4.27",
+    "gh-pages": "^6.3.0",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^3.4.13",
+    "typescript": "~5.9.3",
+    "vite": "^8.0.1"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^6.0.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "xlsx": "^0.18.5"
+  }
+}
