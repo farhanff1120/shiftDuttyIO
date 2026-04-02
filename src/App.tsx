@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import * as XLSX from "xlsx-js-style";
+import { useMemo } from "react";
 
 type Shift = "P" | "S" | "M" | "X" | "C";
 
@@ -9,7 +10,11 @@ const BASE_DATE = new Date(2026, 3, 1);
 // GROUP SHIFT
 const groups = [
   { id: 5, members: ["Rino Yasa", "Erwin Purnomo"], offset: 4 },
-  { id: 4, members: ["Iqbal Faizien", "Handry Herlantik", "Pandji Reksa"], offset: 0 },
+  {
+    id: 4,
+    members: ["Iqbal Faizien", "Handry Herlantik", "Pandji Reksadana"],
+    offset: 0,
+  },
   { id: 3, members: ["Christian", "Masadji Suwieto"], offset: 1 },
   { id: 2, members: ["Abdul Haris", "Farhan Fadhlurrohman"], offset: 2 },
   { id: 1, members: ["Andri Supriadi", "Fattah Ghani"], offset: 3 },
@@ -21,7 +26,7 @@ const personColors: Record<string, string> = {
   "Erwin Purnomo": "bg-blue-200",
   "Iqbal Faizien": "bg-amber-300",
   "Handry Herlantik": "bg-orange-300",
-  "Pandji Reksa": "bg-gray-500 text-white",
+  "Pandji Reksadana": "bg-gray-500 text-white",
   "Christian": "bg-gray-300",
   "Masadji Suwieto": "bg-yellow-600",
   "Abdul Haris": "bg-green-800 text-white",
@@ -29,8 +34,8 @@ const personColors: Record<string, string> = {
   "Andri Supriadi": "bg-red-200",
   "Fattah Ghani": "bg-green-300",
 
-  "Rahmad": "bg-red-500 text-white",
-  "Yoga": "bg-lime-400",
+  Rahmad: "bg-red-500 text-white",
+  Yoga: "bg-lime-400",
 };
 
 const extraLemburNames = ["Rahmad", "Yoga"];
@@ -41,25 +46,23 @@ type Row = {
   shifts: Shift[];
 };
 
+// Hari Libur
+function getDayDiff(date: Date) {
+  return Math.floor((date.getTime() - BASE_DATE.getTime()) / 86400000);
+}
+//Hari Senin-Minggu
 function getHari(date: Date) {
   const days = ["M", "S", "S", "R", "K", "J", "S"];
   return days[date.getDay()];
 }
-
-
-
-function getRowColor(name: string) {
-  return personColors[name] || "";
-}
-
-function getDayDiff(date: Date) {
-  return Math.floor((date.getTime() - BASE_DATE.getTime()) / 86400000);
-}
-
+//tanggal perbulan
 function generateDates(year: number, month: number, holidays: string[]) {
-  const days = new Date(year, month, 0).getDate();
+  const lastDate = new Date(year, month, 0); // last day of month
+  const days = lastDate.getDate();
+
   return Array.from({ length: days }, (_, i) => {
     const date = new Date(year, month - 1, i + 1);
+
     return {
       day: i + 1,
       diff: getDayDiff(date),
@@ -69,7 +72,7 @@ function generateDates(year: number, month: number, holidays: string[]) {
     };
   });
 }
-
+//tanggal
 function formatDate(date: Date) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -78,47 +81,150 @@ function formatDate(date: Date) {
   return `${year}-${month}-${day}`;
 }
 
-
+// Warna Perorang
+function getRowColor(name: string) {
+  return personColors[name] || "";
+}
+//shift n color shift
 function getShift(diff: number, offset: number): Shift {
   const i = (diff + offset) % SHIFT_PATTERN.length;
   return SHIFT_PATTERN[(i + SHIFT_PATTERN.length) % SHIFT_PATTERN.length];
 }
-
+function getShiftColor(shift: Shift) {
+  switch (shift) {
+    case "P":
+      return "bg-white";
+    case "S":
+      return "bg-white";
+    case "M":
+      return "bg-white";
+    case "C":
+      return "bg-blue-300";
+    case "X":
+      return "bg-gray-200";
+    default:
+      return "";
+  }
+}
+//schedule pergroup
 function generateSchedule(dates: any[]): Row[] {
-  return groups.flatMap(group =>
-    group.members.map(name => ({
+  return groups.flatMap((group) =>
+    group.members.map((name) => ({
       name,
       groupId: group.id,
-      shifts: dates.map(d => getShift(d.diff, group.offset)),
-    }))
+      shifts: dates.map((d) => getShift(d.diff, group.offset)),
+    })),
   );
 }
 
-function getShiftColor(shift: Shift) {
-  switch (shift) {
-    case "P": return "bg-white";
-    case "S": return "bg-white";
-    case "M": return "bg-white";
-    case "C": return "bg-blue-300";
-    case "X": return "bg-gray-200";
-    default: return "";
-  }
+{
+  /* APP BODY */
 }
-
 export default function App() {
   const [month, setMonth] = useState(4);
-  const year = 2026;
+  const [year, setYear] = useState(2026);
   const [holidays, setHolidays] = useState<string[]>([]);
-  const dates = generateDates(year, month, holidays);
+  const dates = useMemo(() => {
+    return generateDates(year, month, holidays);
+  }, [year, month, holidays]);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [lembur, setLembur] = useState<string[][]>([]);
-  
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-//Tanggal Merah
+  useEffect(() => {
+    setIsLoading(true);
+    setIsLoaded(false);
+  }, [month, year]);
+
+  {/* Load Data & Generate Schedule*/}
+  useEffect(() => {
+    if (!dates.length) return;
+
+    const key = `shiftSchedule-${year}-${month}`;
+    const saved = localStorage.getItem(key);
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+
+      setSchedule(parsed.schedule || []);
+      setLembur(parsed.lembur || []);
+      
+      setIsLoaded(true);
+      setIsLoading(false); // ✅ PENTING
+
+      console.log("📂 LOAD:", key);
+      return;
+    }
+
+    const newSchedule = generateSchedule(dates);
+
+    const allNames = [...newSchedule.map(r => r.name), ...extraLemburNames];
+
+    const empty = allNames.map(() =>
+      Array.from({ length: dates.length }, () => "")
+    );
+
+    setSchedule(newSchedule);
+    setLembur(empty);
+
+    setIsLoaded(true);
+    setIsLoading(false); // ✅ PENTING
+
+    console.log("🆕 GENERATE:", key);
+
+  }, [month, year, dates]);
+
+  {/* Save Data */}
+  useEffect(() => {
+    if (isLoading) return;
+    if (!isLoaded) return;
+    if (!schedule.length) return;
+    if (!schedule[0]?.shifts?.length) return;
+
+    const key = `shiftSchedule-${year}-${month}`;
+
+    localStorage.setItem(
+      key,
+      JSON.stringify({
+        schedule,
+        lembur,
+      })
+    );
+
+    console.log("✅ SAVED:", key);
+
+  }, [schedule, lembur, month, year, isLoaded, isLoading]);
+
+  {/*REKAP CUTI */}
+  const getYearlyCuti = () => {
+    let yearly: Record<string, number> = {};
+
+    for (let m = 1; m <= 12; m++) {
+      const key = `shiftSchedule-${year}-${m}`;
+      const data = localStorage.getItem(key);
+
+      if (!data) continue;
+
+      const parsed = JSON.parse(data);
+
+      parsed.schedule.forEach((row: any) => {
+        const totalC = row.shifts.filter((s: string) => s === "C").length;
+
+        yearly[row.name] = (yearly[row.name] || 0) + totalC;
+      });
+    }
+
+    return yearly;
+  };
+
+  const yearlyCuti = getYearlyCuti();
+
+  {/* TGL Merah */}
   useEffect(() => {
     fetch("https://date.nager.at/api/v3/PublicHolidays/2026/ID")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         const dates = data.map((d: any) => d.date);
         setHolidays(dates);
       })
@@ -127,55 +233,46 @@ export default function App() {
       });
   }, []);
 
-  useEffect(() => {
-    const newSchedule = generateSchedule(dates);
-    setSchedule(newSchedule);
-
-    const allNames = [
-      ...newSchedule.map(r => r.name),
-      ...extraLemburNames,
-    ];
-
-    const empty = allNames.map(() =>
-      Array.from({ length: dates.length }, () => "")
-    );
-
-    setLembur(empty);
-  }, [month]);
-
-  // CLICK DUTY
+  {/* CLICK DUTY */}
   const handleDutyClick = (rowIndex: number, dayIndex: number) => {
-    const newData = [...schedule];
-    const row = newData[rowIndex];
+    const newData = schedule.map((row, i) => {
+      if (i !== rowIndex) return row;
 
-    const order: Shift[] = ["P", "S", "M", "X", "C"];
-    const current = row.shifts[dayIndex];
+      const order: Shift[] = ["P", "S", "M", "X", "C"];
+      const current = row.shifts[dayIndex];
+      const next = order[(order.indexOf(current) + 1) % order.length];
 
-    const next = order[(order.indexOf(current) + 1) % order.length];
-
-    row.shifts[dayIndex] = next;
+      return {
+        ...row,
+        shifts: row.shifts.map((s, d) =>
+          d === dayIndex ? next : s
+        ),
+      };
+    }); console.log("CLICK DUTY", rowIndex, dayIndex);
 
     setSchedule(newData);
-  };
+  }; 
 
-  // CLICK LEMBUR
+  {/* CLICK LEMBUR */}
   const handleLemburClick = (rowIndex: number, dayIndex: number) => {
-    const newData = [...lembur];
-    const current = newData[rowIndex][dayIndex];
+    const newData = lembur.map((row, i) => {
+      if (i !== rowIndex) return row;
 
-    const order = ["", "P", "S", "M"];
-    const next = order[(order.indexOf(current) + 1) % order.length];
+      const order = ["", "P", "S", "M"];
+      const current = row[dayIndex];
+      const next = order[(order.indexOf(current) + 1) % order.length];
 
-    newData[rowIndex][dayIndex] = next;
+      return row.map((val, d) =>
+        d === dayIndex ? next : val
+      );
+    });
+    
+
     setLembur(newData);
   };
 
-  // Total Duty Harian
-  function calculateTotals(
-    schedule: Row[],
-    lembur: string[][],
-    dates: any[]
-  ) {
+  {/* HITUNG TOTAL DUTY*/}
+  function calculateTotals(schedule: Row[], lembur: string[][], dates: any[]) {
     return dates.map((_, dayIndex) => {
       let totalP = 0;
       let totalS = 0;
@@ -206,143 +303,29 @@ export default function App() {
 
   // EXPORT
   const exportExcel = () => {
+    const allNames = [...schedule.map((r) => r.name), ...extraLemburNames];
+
+    const data = allNames.map((name, i) => ({
+      Name: name,
+      ...dates.reduce((acc, d, idx) => {
+        acc[`D${d.day}`] = schedule[i]?.shifts?.[idx] || "";
+        acc[`L${d.day}`] = lembur[i]?.[idx] || "";
+        return acc;
+      }, {} as any),
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
-
-    const allNames = [
-      ...schedule.map(r => r.name),
-      ...extraLemburNames,
-    ];
-
-    const wsData: any[][] = [];
-
-    // HEADER HARI
-    wsData.push([
-      "Hari",
-      ...dates.map(d => d.hari)
-    ]);
-
-    // HEADER TANGGAL
-    wsData.push([
-      "Tanggal",
-      ...dates.map(d => d.day)
-    ]);
-
-    // DUTY
-    schedule.forEach((row) => {
-      wsData.push([
-        row.name,
-        ...row.shifts
-      ]);
-    });
-
-    // PEMISAH
-    wsData.push(["Backup On Duty", ...Array(dates.length).fill("")]);
-
-    // LEMBUR
-    allNames.forEach((name, i) => {
-      wsData.push([
-        name,
-        ...dates.map((_, d) => lembur[i]?.[d] || "")
-      ]);
-    });
-
-    // TOTAL
-    wsData.push([
-      "Total P",
-      ...totals.map(t => t.totalP)
-    ]);
-
-    wsData.push([
-      "Total S",
-      ...totals.map(t => t.totalS)
-    ]);
-
-    wsData.push([
-      "Total M",
-      ...totals.map(t => t.totalM)
-    ]);
-
-    const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-    // 🎨 STYLE
-    const range = XLSX.utils.decode_range(ws["!ref"] || "");
-
-    for (let R = range.s.r; R <= range.e.r; ++R) {
-      for (let C = range.s.c; C <= range.e.c; ++C) {
-        const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
-
-        if (!ws[cellRef]) continue;
-
-        const cell = ws[cellRef];
-
-        // default border
-        cell.s = {
-          border: {
-            top: { style: "thin" },
-            bottom: { style: "thin" },
-            left: { style: "thin" },
-            right: { style: "thin" },
-          },
-          alignment: {
-            horizontal: "center",
-            vertical: "center",
-          }
-        };
-
-        // HEADER
-        if (R === 0 || R === 1) {
-          cell.s.fill = {
-            fgColor: { rgb: "DDDDDD" }
-          };
-        }
-
-        // PEMISAH
-        if (cell.v === "Backup On Duty") {
-          cell.s.fill = {
-            fgColor: { rgb: "FFD966" }
-          };
-        }
-
-        // TOTAL
-        if (
-          cell.v === "Total P" ||
-          cell.v === "Total S" ||
-          cell.v === "Total M"
-        ) {
-          cell.s.fill = {
-            fgColor: { rgb: "CCCCCC" }
-          };
-        }
-
-        // WEEKEND / HOLIDAY
-        if (C > 0 && dates[C - 1]) {
-          if (dates[C - 1].isHoliday) {
-            cell.s.fill = {
-              fgColor: { rgb: "FF4D4D" }
-            };
-          } else if (dates[C - 1].isWeekend) {
-            cell.s.fill = {
-              fgColor: { rgb: "FFCCCC" }
-            };
-          }
-        }
-      }
-    }
-
     XLSX.utils.book_append_sheet(wb, ws, "Schedule");
+
     XLSX.writeFile(wb, `schedule-${month}.xlsx`);
   };
 
-  const allNames = [
-    ...schedule.map(r => r.name),
-    ...extraLemburNames,
-  ];
+  const allNames = [...schedule.map((r) => r.name), ...extraLemburNames];
 
   return (
     <div className="p-4">
-      <h1 className="text-xl font-bold mb-4">
-        Schedule IO ({month}/2026)
-      </h1>
+      <h1 className="text-xl font-bold mb-4">Schedule IO ({month}/2026)</h1>
 
       <div className="mb-4 flex gap-2">
         <select
@@ -370,7 +353,9 @@ export default function App() {
           <thead>
             {/* BARIS HARI */}
             <tr>
-              <th className="border px-2 sticky left-0 bg-white border-black">Hari</th>
+              <th className="border px-2 sticky left-0 bg-white border-black">
+                Hari
+              </th>
               {dates.map((d, i) => (
                 <th
                   key={i}
@@ -386,8 +371,10 @@ export default function App() {
 
             {/* BARIS TANGGAL */}
             <tr>
-              <th className="border px-2 sticky left-0 bg-white border-black">Tanggal</th>
-              {dates.map(d => (
+              <th className="border px-2 sticky left-0 bg-white border-black">
+                Tanggal
+              </th>
+              {dates.map((d) => (
                 <th
                   key={d.day}
                   className={`border px-1 border-black
@@ -450,7 +437,7 @@ export default function App() {
                 ))}
               </tr>
             ))}
-            
+
             {/* TOTAL DUTY */}
             <tr className="bg-gray-200 font-semibold">
               <td className="border px-2 sticky left-0 bg-gray-200 border-black">
@@ -487,6 +474,40 @@ export default function App() {
                 </td>
               ))}
             </tr>
+          </tbody>
+        </table>
+
+        <div className="mt-6">
+          <h1 className="text-xl font-bold mb-4">Rekap Cuti IO 2026</h1>
+        </div>
+        {/* TABLE REKAP CUTI */}
+        <table className="mt-2 border w-full text-sm">
+          <thead>
+            <tr className="bg-gray-200">
+              <th className="border p-2">Nama</th>
+              <th className="border p-2">Jatah</th>
+              <th className="border p-2">Terpakai</th>
+              <th className="border p-2">Sisa</th>
+            </tr>
+          </thead>
+          <tbody>
+            {schedule.map((row: any) => {
+              const used = yearlyCuti[row.name] || 0;
+              const remain = 12 - used;
+
+              return (
+                <tr key={row.name}>
+                  <td className="border p-2">{row.name}</td>
+                  <td className="border p-2 text-center">12</td>
+                  <td className="border p-2 text-center">{used}</td>
+                  <td
+                    className={`border p-2 text-center ${remain < 3 ? "bg-red-200" : ""}`}
+                  >
+                    {remain}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
