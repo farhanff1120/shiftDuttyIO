@@ -129,17 +129,13 @@ export default function App() {
   }, [year, month, holidays]);
   const [schedule, setSchedule] = useState<Row[]>([]);
   const [lembur, setLembur] = useState<string[][]>([]);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    setIsLoading(true);
-    setIsLoaded(false);
-  }, [month, year]);
+  const [isReady, setIsReady] = useState(false);
 
   {/* Load Data & Generate Schedule*/}
   useEffect(() => {
     if (!dates.length) return;
+
+    setIsReady(false); // stop save dulu
 
     const key = `shiftSchedule-${year}-${month}`;
     const saved = localStorage.getItem(key);
@@ -149,38 +145,29 @@ export default function App() {
 
       setSchedule(parsed.schedule || []);
       setLembur(parsed.lembur || []);
-      
-      setIsLoaded(true);
-      setIsLoading(false); // ✅ PENTING
+    } else {
+      const newSchedule = generateSchedule(dates);
 
-      console.log("📂 LOAD:", key);
-      return;
+      const allNames = [...newSchedule.map(r => r.name), ...extraLemburNames];
+
+      const empty = allNames.map(() =>
+        Array.from({ length: dates.length }, () => "")
+      );
+
+      setSchedule(newSchedule);
+      setLembur(empty);
     }
 
-    const newSchedule = generateSchedule(dates);
-
-    const allNames = [...newSchedule.map(r => r.name), ...extraLemburNames];
-
-    const empty = allNames.map(() =>
-      Array.from({ length: dates.length }, () => "")
-    );
-
-    setSchedule(newSchedule);
-    setLembur(empty);
-
-    setIsLoaded(true);
-    setIsLoading(false); // ✅ PENTING
-
-    console.log("🆕 GENERATE:", key);
+    setTimeout(() => {
+      setIsReady(true); //baru boleh save
+    }, 0);
 
   }, [month, year, dates]);
 
   {/* Save Data */}
   useEffect(() => {
-    if (isLoading) return;
-    if (!isLoaded) return;
+    if (!isReady) return;
     if (!schedule.length) return;
-    if (!schedule[0]?.shifts?.length) return;
 
     const key = `shiftSchedule-${year}-${month}`;
 
@@ -192,12 +179,10 @@ export default function App() {
       })
     );
 
-    console.log("✅ SAVED:", key);
-
-  }, [schedule, lembur, month, year, isLoaded, isLoading]);
+  }, [schedule, lembur, isReady, month, year]);
 
   {/*REKAP CUTI */}
-  const getYearlyCuti = () => {
+  const yearlyCuti = useMemo(() => {
     let yearly: Record<string, number> = {};
 
     for (let m = 1; m <= 12; m++) {
@@ -215,10 +200,32 @@ export default function App() {
       });
     }
 
-    return yearly;
-  };
+    // ✅ FIX: replace bulan aktif saja (bukan semua)
+    schedule.forEach((row) => {
+      const currentMonthC = row.shifts.filter((s) => s === "C").length;
 
-  const yearlyCuti = getYearlyCuti();
+      const key = `shiftSchedule-${year}-${month}`;
+      const saved = localStorage.getItem(key);
+
+      let oldMonthC = 0;
+
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const found = parsed.schedule.find((r: any) => r.name === row.name);
+
+        if (found) {
+          oldMonthC = found.shifts.filter((s: string) => s === "C").length;
+        }
+      }
+
+      // 👉 kurangi yang lama, tambah yang baru
+      yearly[row.name] =
+        (yearly[row.name] || 0) - oldMonthC + currentMonthC;
+    });
+
+    return yearly;
+
+  }, [schedule, month]);
 
   {/* TGL Merah */}
   useEffect(() => {
