@@ -122,7 +122,7 @@ function generateSchedule(dates: any[]): Row[] {
 }
 export default function App() {
   const [month, setMonth] = useState(4);
-  const [year, setYear] = useState(2026);
+  const [year] = useState(2026);
   const [holidays, setHolidays] = useState<string[]>([]);
   const dates = useMemo(() => {
     return generateDates(year, month, holidays);
